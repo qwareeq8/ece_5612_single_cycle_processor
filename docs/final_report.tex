@@ -1,0 +1,978 @@
+\documentclass[12pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amsthm, amssymb, amsfonts, fancyhdr, color, enumitem, graphicx, environ, mathtools, listings, algorithm, algorithmic}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\bfseries\ttfamily,
+  breaklines=true,
+  showstringspaces=false,
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{Yusuf Qwareeq}
+\fancyhead[R]{Final Project Report \\ Advanced Processor Systems (ECE 5612) \\ Fall 2024}
+\fancyfoot[C]{\thepage}
+\setlength{\headheight}{50pt}
+
+\begin{document}
+
+\begin{titlepage}
+    \centering
+    \vspace*{1in}
+    
+    \Huge
+    \textbf{Design and Implementation of a 64-bit RISC-V Single-Cycle Processor}
+    
+    \vspace{0.5in}
+    
+    \Large
+    Yusuf Qwareeq \\ 
+    Advanced Processor Systems (ECE 5612) \\ 
+    Professor Son Nguyen \\ 
+    12/10/2024
+    
+    \vfill
+    
+    \Large
+    Temple University
+\end{titlepage}
+
+\section*{Objectives}
+
+The objective of this project is to design and implement a processor using Verilog. The processor must execute a specific subset of instructions, encompassing arithmetic, logical, memory access, and control flow operations, within a single clock cycle.
+
+The processor will implement the following \textbf{R-type instructions}: \texttt{ADD}, \texttt{ADDU}, \texttt{SUB}, \texttt{SUBU}, \texttt{MUL}, \texttt{MULU}, \texttt{MULH}, \texttt{MULHU}, \texttt{DIV}, \texttt{DIVU}, \texttt{REM}, \texttt{REMU}, \texttt{AND}, and \texttt{OR}. Additionally, it will support \textbf{load and store instructions} (\texttt{LD}, \texttt{SD}) and the \textbf{branch instruction} (\texttt{BEQ}).
+
+To achieve this, the project involves designing each module in the processor, including the arithmetic logic unit (ALU), control unit, register file, data memory, and support modules, ensuring modularity and correctness. The ALU is implemented using structural modeling, building it hierarchically from basic components such as half adders to a 64-bit adder/subtractor, and incorporating support for both signed and unsigned multiplication and division. Behavioral modeling is employed for components like the control unit and logical operations to streamline development. All modules are then integrated into a fully functional processor.
+
+The processor's functionality is validated through comprehensive testing at both the module and system levels. Step-by-step simulations of instruction execution demonstrate correctness, ensuring that the design meets the project's objectives.
+
+\section*{Tools}
+
+The design and simulation of the processor utilized the following tools and software:
+
+Verilog (Vivado) was used for hardware design entry and simulation, and the Vivado Waveform Viewer was used to analyze and debug simulation results. No hardware implementation was required for this project, as the focus was entirely on simulation and verification in Vivado.
+
+\section*{Introduction}
+
+Single-cycle processors execute each instruction in one clock cycle, making them simple yet effective for understanding instruction set architecture and processor design. In such designs, all necessary operations, including fetching, decoding, execution, and memory access, are performed within one cycle. This approach simplifies control logic but may require longer cycle times to accommodate the slowest instruction.
+
+The processor for this project is designed around a block diagram (shown in Figure \ref{fig:processor_block_diagram}) that includes fundamental components like the ALU, control unit, register file, and data memory. Each module plays a critical role: the ALU performs arithmetic and logical operations, the control unit generates signals based on instruction opcodes, and the register file facilitates data storage and transfer. The integration of these modules ensures the seamless execution of all supported instructions.
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=0.9\textwidth]{processor_block_diagram.png}
+    \caption{Block diagram of the single-cycle processor. This diagram outlines the core components, including the ALU, control unit, register file, and data memory, and shows their interconnections for seamless execution of instructions.}
+    \label{fig:processor_block_diagram}
+\end{figure}
+
+The supported instructions can be grouped into three types. Load and store instructions enable interaction with memory, facilitating data transfer between registers and memory locations. R-type instructions, such as \texttt{ADD}, \texttt{MUL}, and \texttt{AND}, perform arithmetic and logical operations on data stored in registers. Finally, branch instructions like \texttt{BEQ} allow for conditional program control by altering the flow of execution based on comparisons.
+
+This project demonstrates the design and testing of a processor that efficiently integrates these operations while adhering to single-cycle constraints. The modular design approach ensures that each component is independently verified before integration, maintaining correctness and scalability.
+
+\section*{Module Descriptions}
+
+\subsection*{Arithmetic Logic Unit (ALU)}
+
+The ALU is a central component of the processor, responsible for performing arithmetic, logical, and comparison operations. It supports a range of operations determined by a 4-bit control signal, including addition, subtraction, multiplication, division, logical AND, and OR. The module produces additional flags, such as zero, overflow, carry out, and division by zero.
+
+The ALU was implemented using hierarchical structural modeling. For example, addition was built up from a half adder, progressing to a 64-bit ripple carry adder. Multiplication and division operations were implemented to handle both signed and unsigned numbers.
+
+\paragraph{Inputs and Outputs}
+The ALU accepts two 64-bit operands (\texttt{operand\_a}, \texttt{operand\_b}) and a 4-bit control signal (\texttt{alu\_control}) as inputs. It produces a 64-bit result (\texttt{alu\_result}) and flags (\texttt{zero\_flag}, \texttt{overflow\_flag}, \texttt{carry\_out\_flag}, and \texttt{divide\_by\_zero\_flag}) as outputs. The operations performed by the ALU are determined by the control signals, as shown in Table \ref{tab:control_signals}.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabular}{|c|l|}
+        \hline
+        \textbf{Control Signal} & \textbf{Operation} \\
+        \hline
+        \texttt{0000} & Logical AND \\
+        \texttt{0001} & Logical OR \\
+        \texttt{0010} & Signed addition (ADD) \\
+        \texttt{0011} & Unsigned addition (ADDU) \\
+        \texttt{0110} & Signed subtraction (SUB) \\
+        \texttt{0111} & Unsigned subtraction (SUBU) \\
+        \texttt{1000} & Signed multiplication (MUL) \\
+        \texttt{1001} & Unsigned multiplication (MULU) \\
+        \texttt{1010} & Signed division (DIV) \\
+        \texttt{1011} & Unsigned division (DIVU) \\
+        \texttt{1100} & Signed remainder (REM) \\
+        \texttt{1101} & Unsigned remainder (REMU) \\
+        \texttt{1110} & High bits of signed multiplication (MULH) \\
+        \texttt{1111} & High bits of unsigned multiplication (MULHU) \\
+        \hline
+    \end{tabular}
+    \caption{ALU control signals and their corresponding operations.}
+    \label{tab:control_signals}
+\end{table}
+
+\paragraph{Testbench Description}
+The functionality of the ALU was validated using a testbench that applied various combinations of inputs and control signals. Each operation was tested using predetermined inputs and expected outputs, which were displayed and verified. A waveform (shown in Figure \ref{fig:alu_waveform}) was generated to visualize the operation of the ALU over time.
+
+\paragraph{Results}
+Table \ref{tab:alu_results} summarizes the results of the testbench. These results demonstrate the ALU's correct behavior across all tested operations. For example, in signed addition (\texttt{ctrl = 0010}), adding \texttt{0x0000000000000005} and \texttt{0x0000000000000003} produced the expected result \texttt{0x0000000000000008} without setting any flags. In unsigned addition (\texttt{ctrl = 0011}), adding \texttt{0xFFFFFFFFFFFFFFFF} and \texttt{0x0000000000000001} correctly resulted in \texttt{0x0000000000000000} with the carry-out flag set to 1. Logical operations like AND (\texttt{ctrl = 0000}) produced accurate results, as did multiplication and division operations.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{2pt}
+    \begin{tabular}{|c|c|c|c|c|c|c|}
+        \hline
+        \textbf{\texttt{ctrl}} & \textbf{\texttt{A}} & \textbf{\texttt{B}} & \textbf{\texttt{result}} & \textbf{\texttt{zero}} & \textbf{\texttt{overflow}} & \textbf{\texttt{c\_out}} \\
+        \hline
+        \texttt{0010} & \texttt{0000000000000005} & \texttt{0000000000000003} & \texttt{0000000000000008} & \texttt{0} & \texttt{0} & \texttt{0} \\
+        \texttt{0011} & \texttt{FFFFFFFFFFFFFFFF} & \texttt{0000000000000001} & \texttt{0000000000000000} & \texttt{0} & \texttt{0} & \texttt{1} \\
+        \texttt{0110} & \texttt{000000000000000A} & \texttt{000000000000000A} & \texttt{0000000000000000} & \texttt{1} & \texttt{0} & \texttt{0} \\
+        \texttt{0110} & \texttt{0000000000000010} & \texttt{0000000000000010} & \texttt{0000000000000000} & \texttt{1} & \texttt{0} & \texttt{0} \\
+        \texttt{1000} & \texttt{0000000000000003} & \texttt{0000000000000002} & \texttt{0000000000000006} & \texttt{0} & \texttt{0} & \texttt{0} \\
+        \texttt{1010} & \texttt{000000000000000A} & \texttt{0000000000000003} & \texttt{0000000000000003} & \texttt{0} & \texttt{0} & \texttt{0} \\
+        \texttt{0000} & \texttt{FFFFFFFFFFFFFFFF} & \texttt{000000000000000F} & \texttt{000000000000000F} & \texttt{0} & \texttt{0} & \texttt{0} \\
+        \hline
+    \end{tabular}
+    \caption{ALU test results in hexadecimal. The table shows the control signal (\texttt{ctrl}), operands (\texttt{A}, \texttt{B}), result (\texttt{result}), and flag states (\texttt{zero}, \texttt{overflow}, and \texttt{c\_out}) for each operation.}
+    \label{tab:alu_results}
+\end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{test_benches/alu_64_tb.png}
+    \caption{Waveform generated during ALU testing. The figure illustrates the transitions of inputs and outputs for operations like addition, subtraction, and multiplication, verifying the correctness and timing of the ALU implementation.}
+    \label{fig:alu_waveform}
+\end{figure}
+
+\subsection*{Ripple Carry Adder (RCA)}
+
+The Ripple Carry Adder (RCA) is a key component of the ALU, responsible for performing both signed and unsigned addition. The design uses a hierarchical structure, starting from a half adder and building up to a 64-bit ripple carry adder. It also supports the detection of overflow for signed addition, which is indicated by a dedicated flag.
+
+\paragraph{Inputs and Outputs}
+The RCA accepts two 64-bit operands (\texttt{input\_a}, \texttt{input\_b}), a carry-in (\texttt{carry\_in}), and a signal (\texttt{is\_signed\_add}) indicating whether the addition is signed or unsigned. It produces a 64-bit sum (\texttt{sum\_out}), a carry-out (\texttt{carry\_out}), and an overflow flag (\texttt{overflow}).
+
+\paragraph{Testbench Description}
+The RCA was tested using a comprehensive testbench that validated its functionality across various cases, including edge scenarios such as positive and negative overflow. Each test case was designed to provide a mix of signed and unsigned additions with specific input values. A waveform was generated to confirm the correct operation over time, as shown in Figure \ref{fig:adder_waveform}.
+
+\paragraph{Results}
+The testbench results, summarized in Table \ref{tab:adder_results}, demonstrate the RCA's ability to handle all tested scenarios. For instance, in unsigned addition, adding \texttt{0x0000000000000005} and \texttt{0x000000000000000A} produces the expected result of \texttt{0x000000000000000F} with no carry-out or overflow. In signed addition, adding the maximum positive value \texttt{0x7FFFFFFF \break FFFFFFFF} with \texttt{0x0000000000000001} correctly triggers the overflow flag.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{2pt}
+    \begin{tabular}{|c|c|c|c|c|c|c|}
+        \hline
+        \texttt{A} & \texttt{B} & \texttt{c\_in} & \texttt{signed} & \texttt{result} & \texttt{c\_out} & \texttt{overflow} \\
+        \hline
+        \texttt{0000000000000005} & \texttt{000000000000000A} & \texttt{0} & \texttt{0} & \texttt{000000000000000F} & \texttt{0} & \texttt{x} \\
+        \texttt{FFFFFFFFFFFFFFFF} & \texttt{0000000000000001} & \texttt{1} & \texttt{0} & \texttt{0000000000000001} & \texttt{1} & \texttt{x} \\
+        \texttt{7FFFFFFFFFFFFFFF} & \texttt{0000000000000001} & \texttt{0} & \texttt{1} & \texttt{8000000000000000} & \texttt{x} & \texttt{1} \\
+        \texttt{8000000000000000} & \texttt{FFFFFFFFFFFFFFFF} & \texttt{0} & \texttt{1} & \texttt{7FFFFFFFFFFFFFFF} & \texttt{x} & \texttt{1} \\
+        \texttt{0000000000003039} & \texttt{FFFFFFFFFFFCFDAF} & \texttt{0} & \texttt{1} & \texttt{FFFFFFFFFFFD2DE8} & \texttt{x} & \texttt{0} \\
+        \texttt{FFFFFFFFFFFFFFFF} & \texttt{0000000000000001} & \texttt{0} & \texttt{0} & \texttt{0000000000000000} & \texttt{1} & \texttt{x} \\
+        \texttt{0000000000000000} & \texttt{0000000000000000} & \texttt{0} & \texttt{0} & \texttt{0000000000000000} & \texttt{0} & \texttt{x} \\
+        \texttt{FFFFFFFFFFFFFF9C} & \texttt{FFFFFFFFFFFFFF38} & \texttt{0} & \texttt{1} & \texttt{FFFFFFFFFFFFFED4} & \texttt{x} & \texttt{0} \\
+        \hline
+    \end{tabular}
+    \caption{RCA test results in hexadecimal. The table shows the input operands (\texttt{A} and \texttt{B}), the carry-in (\texttt{c\_in}), the signed flag (\texttt{signed}), the sum result (\texttt{result}), the carry-out (\texttt{c\_out}), and the overflow flag (\texttt{overflow}).}
+    \label{tab:adder_results}
+\end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{test_benches/add_rca_64_tb.png}
+    \caption{Waveform generated during RCA testing. The figure illustrates the transitions of inputs and outputs for operations like addition, verifying the correctness and timing of the implementation.}
+    \label{fig:adder_waveform}
+\end{figure}
+
+\subsection*{Ripple Carry Subtractor (RCS)}
+
+The Ripple Carry Subtractor (RCS) is an integral component of the processor, designed to perform both signed and unsigned subtraction. It implements subtraction as \( A + (-B) \), leveraging the ripple carry adder to compute the sum of the minuend and the two's complement of the subtrahend. This design efficiently reuses the addition logic while maintaining accuracy for both signed and unsigned operations.
+
+\paragraph{Inputs and Outputs}
+The RCS accepts two 64-bit operands (\texttt{input\_a}, \texttt{input\_b}), a borrow-in signal (\texttt{borrow\_in}), and a control signal (\texttt{is\_signed\_sub}) that specifies whether the subtraction is signed or unsigned. It produces a 64-bit difference (\texttt{diff\_out}), a borrow-out signal (\texttt{borrow\_out}) for unsigned operations, and an overflow flag (\texttt{overflow}) for signed operations.
+
+\paragraph{Testbench Description}
+The functionality of the RCS was validated through a comprehensive testbench. The testbench applied various combinations of inputs to test scenarios such as unsigned subtraction with borrow, signed subtraction with overflow, and edge cases involving maximum and minimum values. A waveform was generated to verify the transitions of inputs and outputs over time, ensuring correctness in the module's operation.
+
+\paragraph{Results}
+The results of the testbench, detailed in Table \ref{tab:subtractor_results}, confirm the RCS's accuracy across all tested scenarios. For instance, in unsigned subtraction, subtracting \texttt{0x00000000 \break 00000002} from \texttt{0x0000000000000005} yields \texttt{0x0000000000000003} with no borrow-out or overflow. In signed subtraction, subtracting \texttt{0xFFFFFFFFFFFFFFFF} from the maximum positive value \texttt{0x7FFFFFFFFFFFFFFF} correctly triggers the overflow flag.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{2pt}
+    \begin{tabular}{|c|c|c|c|c|c|c|}
+        \hline
+        \texttt{A} & \texttt{B} & \texttt{b\_in} & \texttt{signed} & \texttt{result} & \texttt{b\_out} & \texttt{overflow} \\
+        \hline
+        \texttt{0000000000000005} & \texttt{0000000000000002} & \texttt{0} & \texttt{0} & \texttt{0000000000000003} & \texttt{0} & \texttt{x} \\
+        \texttt{0000000000000001} & \texttt{0000000000000002} & \texttt{1} & \texttt{0} & \texttt{0000000000000000} & \texttt{1} & \texttt{x} \\
+        \texttt{7FFFFFFFFFFFFFFF} & \texttt{FFFFFFFFFFFFFFFF} & \texttt{0} & \texttt{1} & \texttt{8000000000000000} & \texttt{x} & \texttt{1} \\
+        \texttt{8000000000000000} & \texttt{0000000000000001} & \texttt{0} & \texttt{1} & \texttt{7FFFFFFFFFFFFFFF} & \texttt{x} & \texttt{1} \\
+        \texttt{0000000000003039} & \texttt{FFFFFFFFFFFCFDAF} & \texttt{0} & \texttt{1} & \texttt{000000000003328A} & \texttt{x} & \texttt{0} \\
+        \texttt{0000000000000000} & \texttt{FFFFFFFFFFFFFFFF} & \texttt{0} & \texttt{0} & \texttt{0000000000000001} & \texttt{1} & \texttt{x} \\
+        \texttt{0000000000000000} & \texttt{0000000000000000} & \texttt{0} & \texttt{0} & \texttt{0000000000000000} & \texttt{0} & \texttt{x} \\
+        \texttt{FFFFFFFFFFFFFF9C} & \texttt{FFFFFFFFFFFFFF38} & \texttt{0} & \texttt{1} & \texttt{0000000000000064} & \texttt{x} & \texttt{0} \\
+        \hline
+    \end{tabular}
+    \caption{RCS test results in hexadecimal. The table shows the input operands (\texttt{A} and \texttt{B}), the borrow-in (\texttt{b\_in}), the signed flag (\texttt{signed}), the difference result (\texttt{result}), the borrow-out (\texttt{b\_out}), and the overflow flag (\texttt{overflow}).}
+    \label{tab:subtractor_results}
+\end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{test_benches/sub_rca_64_tb.png}
+    \caption{Waveform generated during RCS testing. The figure illustrates the transitions of inputs and outputs for operations like subtraction, verifying the correctness and timing of the implementation.}
+    \label{fig:subtractor_waveform}
+\end{figure}
+
+\subsection*{Multiplier}
+
+The 64-bit Multiplier module performs signed and unsigned multiplication based on the control signal (\texttt{is\_signed\_mult}). It uses an iterative bit-shifting approach for efficient hardware implementation. This process involves updating the product register based on the least significant bit (LSB) of the multiplier, shifting the multiplicand left and the multiplier right on each iteration. Signed multiplication is handled by converting inputs to their absolute values and applying a correction to the result based on the original signs. The steps of this algorithm are summarized in Algorithm \ref{alg:multiplication}.
+
+\paragraph{Inputs and Outputs}
+The multiplier accepts two 32-bit operands (\texttt{multiplicand\_in}, \texttt{multiplier\_in}) and a control signal (\texttt{is\_signed\_mult}) indicating whether the operation is signed or unsigned. It produces a 64-bit product (\texttt{product\_out}).
+
+\begin{algorithm}[ht!]
+    \caption{64-bit Multiplication Algorithm}
+    \label{alg:multiplication}
+    \begin{algorithmic}[1]
+        \REQUIRE $a, b \in \mathbb{Z}_{32}, \text{is\_signed} \in \{0, 1\}$
+        \ENSURE $p \in \mathbb{Z}_{64}$
+        \IF{$\text{is\_signed}$}
+            \STATE Convert $a, b$ to positive; set flags.
+        \ENDIF
+        \STATE $p \leftarrow 0$
+        \FOR{$i \leftarrow 0$ to $31$}
+            \IF{$b_0 = 1$} 
+                \STATE $p \leftarrow p + a$
+            \ENDIF
+            \STATE $a \leftarrow a \ll 1$, $b \leftarrow b \gg 1$
+        \ENDFOR
+        \IF{$\text{is\_signed}$}
+            \STATE Adjust sign.
+        \ENDIF
+        \STATE $p_{\text{out}} \leftarrow p$
+    \end{algorithmic}
+\end{algorithm}
+
+\paragraph{Testbench Description}
+The multiplier was tested using a comprehensive testbench that validated its functionality across various scenarios, including signed and unsigned multiplication, edge cases like multiplication by zero, and typical cases involving both large and small values. Each test confirmed the correct operation of the algorithm and its adherence to expected behavior.
+
+\paragraph{Results}
+The results, detailed in Table \ref{tab:multiplier_results}, confirm the accuracy of the multiplier. For example, the product of \texttt{0x00000005} and \texttt{0x0000000A} in unsigned mode was correctly computed as \texttt{0x0000000000000032}. Similarly, signed multiplication of \texttt{0x80000000} and \texttt{0xFFFFFFFF} resulted in \texttt{0x0000000080000000}, demonstrating correct handling of signed operations.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{\texttt{multiplicand}} & \textbf{\texttt{multiplier}} & \textbf{\texttt{signed}} & \textbf{\texttt{p\_out}} \\
+        \hline
+        \texttt{00000005} & \texttt{0000000A} & \texttt{0} & \texttt{0000000000000032} \\
+        \texttt{FFFFFFFF} & \texttt{00000001} & \texttt{0} & \texttt{00000000FFFFFFFF} \\
+        \texttt{7FFFFFFF} & \texttt{00000002} & \texttt{1} & \texttt{00000000FFFFFFFE} \\
+        \texttt{80000000} & \texttt{FFFFFFFF} & \texttt{1} & \texttt{0000000080000000} \\
+        \texttt{00003039} & \texttt{FFFFFDAF} & \texttt{1} & \texttt{FFFFFFFFFF904BF7} \\
+        \texttt{00000000} & \texttt{FFFFFFFF} & \texttt{0} & \texttt{0000000000000000} \\
+        \texttt{FFFFFF9C} & \texttt{FFFFFF38} & \texttt{1} & \texttt{0000000000004E20} \\
+        \texttt{00000000} & \texttt{00000000} & \texttt{0} & \texttt{0000000000000000} \\
+        \hline
+    \end{tabular}
+    \caption{Multiplier test results in hexadecimal. The table shows the input operands (\texttt{multiplicand}, \texttt{multiplier}), the signed control flag (\texttt{migned}), and the computed product (\texttt{p\_out}).}
+    \label{tab:multiplier_results}
+\end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{test_benches/mul_64_tb.png}
+    \caption{Waveform generated during multiplier testing. The figure illustrates the transitions of inputs and outputs for various test cases, confirming the correctness of the implementation.}
+    \label{fig:multiplier_waveform}
+\end{figure}
+
+\subsection*{Divider}
+
+The 64-bit Divider module performs signed and unsigned division based on the control signal (\texttt{is\_signed\_div}). It uses an iterative hardware-based algorithm that mimics manual division by shifting and subtracting. The divisor is shifted right on each iteration while the quotient is built one bit at a time. Signed division is handled by converting inputs to their absolute values and applying corrections to the result based on the original signs. The steps of this algorithm are summarized in Algorithm \ref{alg:division}.
+
+\paragraph{Inputs and Outputs}
+The divider accepts a 64-bit dividend (\texttt{dividend\_in}), a 32-bit divisor (\texttt{divisor\_in}), and a control signal (\texttt{is\_signed\_div}) indicating whether the operation is signed or unsigned. It produces a 32-bit quotient (\texttt{quotient\_out}), a 64-bit remainder (\texttt{remainder\_out}), and a divide-by-zero flag (\texttt{divide\_by\_zero\_flag}).
+
+\begin{algorithm}[ht!]
+    \caption{64-bit Division Algorithm}
+    \label{alg:division}
+    \begin{algorithmic}[1]
+        \REQUIRE $d \in \mathbb{Z}_{64}, r \in \mathbb{Z}_{32}, \text{is\_signed} \in \{0, 1\}$
+        \ENSURE $q \in \mathbb{Z}_{32}, \text{remainder} \in \mathbb{Z}_{64}, \text{divide\_by\_zero} \in \{0, 1\}$
+        \IF{$r = 0$}
+            \STATE $\text{divide\_by\_zero} \leftarrow 1$
+            \STATE $q \leftarrow 0$, $\text{remainder} \leftarrow 0$
+        \ELSE
+            \IF{$\text{is\_signed}$}
+                \STATE Convert $d, r$ to positive; set flags.
+            \ENDIF
+            \STATE $\text{remainder} \leftarrow d$
+            \STATE $r \leftarrow r \ll 32$
+            \STATE $q \leftarrow 0$
+            \FOR{$i \leftarrow 0$ to $32$}
+                \IF{$\text{remainder} \geq r$}
+                    \STATE $\text{remainder} \leftarrow \text{remainder} - r$
+                    \STATE $q \leftarrow (q \ll 1) | 1$
+                \ELSE
+                    \STATE $q \leftarrow q \ll 1$
+                \ENDIF
+                \STATE $r \leftarrow r \gg 1$
+            \ENDFOR
+            \IF{$\text{is\_signed}$}
+                \STATE Adjust sign of $q$ and $\text{remainder}$.
+            \ENDIF
+        \ENDIF
+        \STATE $q_{\text{out}} \leftarrow q$, $\text{remainder}_{\text{out}} \leftarrow \text{remainder}$, $\text{divide\_by\_zero}_{\text{out}} \leftarrow \text{divide\_by\_zero}$
+    \end{algorithmic}
+\end{algorithm}
+
+\paragraph{Testbench Description}
+The divider was tested using a comprehensive testbench that validated its functionality across various scenarios, including signed and unsigned division, edge cases such as division by zero, and typical cases involving large and small values. Each test confirmed the correct operation of the algorithm and its adherence to expected behavior.
+
+\paragraph{Results}
+The results, detailed in Table \ref{tab:divider_results}, confirm the accuracy of the divider. For example, the division of \texttt{0x0000000000000064} by \texttt{0x00000005} in unsigned mode was correctly computed as \texttt{quotient = 0x00000014} and \texttt{remainder = 0x0000000000000000}. Similarly, signed division of \texttt{0xFFFFFFFFFFFFFF9C} by \texttt{0xFFFFFFFF} resulted in \texttt{quotient = 0x00000014} and \texttt{remainder = 0x0000000000000000}, demonstrating correct handling of signed operations.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabular}{|c|c|c|c|c|c|}
+        \hline
+        \textbf{\texttt{dividend}} & \textbf{\texttt{divisor}} & \textbf{\texttt{signed}} & \textbf{\texttt{quotient}} & \textbf{\texttt{remainder}} & \textbf{\texttt{divide\_by\_zero}} \\
+        \hline
+        \texttt{0000000000000064} & \texttt{00000005} & \texttt{0} & \texttt{00000014} & \texttt{0000000000000000} & \texttt{0} \\
+        \texttt{0000000000000067} & \texttt{00000005} & \texttt{0} & \texttt{00000014} & \texttt{0000000000000003} & \texttt{0} \\
+        \texttt{0000000000000064} & \texttt{00000005} & \texttt{1} & \texttt{00000014} & \texttt{0000000000000000} & \texttt{0} \\
+        \texttt{FFFFFFFFFFFFFF9C} & \texttt{00000005} & \texttt{1} & \texttt{FFFFFFEC} & \texttt{0000000000000000} & \texttt{0} \\
+        \texttt{0000000000000064} & \texttt{FFFFFFFB} & \texttt{1} & \texttt{FFFFFFEC} & \texttt{0000000000000000} & \texttt{0} \\
+        \texttt{FFFFFFFFFFFFFF9C} & \texttt{FFFFFFFB} & \texttt{1} & \texttt{00000014} & \texttt{0000000000000000} & \texttt{0} \\
+        \texttt{0000000000000064} & \texttt{00000000} & \texttt{0} & \texttt{00000000} & \texttt{0000000000000000} & \texttt{1} \\
+        \texttt{FFFFFFFFFFFFFF9C} & \texttt{00000000} & \texttt{1} & \texttt{00000000} & \texttt{0000000000000000} & \texttt{1} \\
+        \hline
+    \end{tabular}
+    \caption{Divider test results in hexadecimal. The table shows the input operands (\texttt{dividend}, \texttt{divisor}), the signed control flag (\texttt{signed}), the computed quotient (\texttt{quotient}), the remainder (\texttt{remainder}), and the divide-by-zero flag (\texttt{divide\_by\_zero}).}
+    \label{tab:divider_results}
+\end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{test_benches/div_64_tb.png}
+    \caption{Waveform generated during divider testing. The figure illustrates the transitions of inputs and outputs for various test cases, confirming the correctness of the implementation.}
+    \label{fig:divider_waveform}
+\end{figure}
+
+\newpage
+
+\subsection*{AND Gate}
+
+The 64-bit AND Gate is a fundamental digital logic component designed to perform bitwise AND operations on two 64-bit input vectors. It plays a crucial role in the ALU of the RISC-V 64-bit Single-Cycle CPU, enabling efficient execution of logical operations.
+
+\paragraph{Inputs and Outputs}
+The AND Gate module accepts two 64-bit input vectors, \texttt{A} and \texttt{B}, which represent the operands for the logical AND operation. It produces a single 64-bit output vector, \texttt{result}, which contains the result of the bitwise AND operation applied to the inputs.
+
+\paragraph{Testbench Description}
+The functionality of the AND Gate was verified using a testbench that explored a variety of scenarios, including edge cases and typical use cases. The inputs were varied to include all zeros, all ones, alternating bit patterns, and randomly selected values. The outputs were validated against expected results to ensure accuracy.
+
+\paragraph{Results}
+The testbench results, summarized below, confirm the correctness of the AND Gate module. For instance, when both inputs were all ones (\texttt{0xFFFFFFFFFFFFFFFF}), the output was correctly computed as \texttt{0xFFFFFFFFFFFFFFFF}. Similarly, for alternating input patterns (\texttt{0xAAAAAAAAAAAAAAAA} and \texttt{0x5555555555555555}), the output was \texttt{0x00000000 \break 00000000}, demonstrating accurate logical behavior.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{\texttt{A}} & \textbf{\texttt{B}} & \textbf{\texttt{result}} \\
+        \hline
+        \texttt{0000000000000000} & \texttt{0000000000000000} & \texttt{0000000000000000} \\
+        \texttt{FFFFFFFFFFFFFFFF} & \texttt{FFFFFFFFFFFFFFFF} & \texttt{FFFFFFFFFFFFFFFF} \\
+        \texttt{AAAAAAAAAAAAAAAA} & \texttt{5555555555555555} & \texttt{0000000000000000} \\
+        \texttt{123456789ABCDEF0} & \texttt{0FEDCBA987654321} & \texttt{0224422882244220} \\
+        \texttt{FFFFFFFF00000000} & \texttt{00000000FFFFFFFF} & \texttt{0000000000000000} \\
+        \hline
+    \end{tabular}
+    \caption{AND Gate test results in hexadecimal. The table shows the input vectors (\texttt{A} and \texttt{B}) and the computed AND result (\texttt{result}).}
+    \label{tab:and_results}
+\end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{test_benches/and_64_tb.png}
+    \caption{Waveform generated during AND Gate testing. The figure illustrates the transitions of inputs and outputs, validating the correctness of the bitwise AND operation.}
+    \label{fig:and_waveform}
+\end{figure}
+
+\subsection*{OR Gate}
+
+The 64-bit OR Gate module performs a bitwise OR operation on two 64-bit input vectors. This simple yet essential operation is crucial in many arithmetic and logical operations, particularly in control logic and data masking. The module is implemented with a direct assignment, ensuring efficient hardware synthesis and operation.
+
+\paragraph{Inputs and Outputs}
+The OR gate accepts two 64-bit input vectors (\texttt{A} and \texttt{B}) and produces a single 64-bit output vector (\texttt{result}). Each bit in the output vector represents the logical OR of the corresponding bits in the two input vectors.
+
+\paragraph{Testbench Description}
+The OR gate module was tested using a comprehensive testbench that verified its behavior across various scenarios, including all zeros, all ones, alternating bits, and edge cases. Each test case provided distinct inputs to ensure the module's correctness. The results were displayed in hexadecimal format for compactness and clarity.
+
+\paragraph{Results}
+The testbench results confirm the module's correctness across all scenarios. For instance, when the inputs are \texttt{0xAAAAAAAAAAAAAAAA} and \texttt{0x5555555555555555}, the output is correctly computed as \texttt{0xFFFFFFFFFFFFFFFF}. Similarly, when inputs are \texttt{0xFFFFFFFF \break 00000000} and \texttt{0x00000000FFFFFFFF}, the output is correctly computed as \texttt{0xFFFFFFFF \break FFFFFFFF}. These results demonstrate the accuracy and reliability of the module.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{2pt}
+    \begin{tabular}{|c|c|c|}
+        \hline
+        \textbf{\texttt{A}} & \textbf{\texttt{B}} & \textbf{\texttt{result}} \\
+        \hline
+        \texttt{0000000000000000} & \texttt{0000000000000000} & \texttt{0000000000000000} \\
+        \texttt{FFFFFFFFFFFFFFFF} & \texttt{FFFFFFFFFFFFFFFF} & \texttt{FFFFFFFFFFFFFFFF} \\
+        \texttt{AAAAAAAAAAAAAAAA} & \texttt{5555555555555555} & \texttt{FFFFFFFFFFFFFFFF} \\
+        \texttt{123456789ABCDEF0} & \texttt{0FEDCBA987654321} & \texttt{1FFDDFF99FFDDFF1} \\
+        \texttt{FFFFFFFF00000000} & \texttt{00000000FFFFFFFF} & \texttt{FFFFFFFFFFFFFFFF} \\
+        \hline
+    \end{tabular}
+    \caption{64-bit OR Gate test results in hexadecimal format. Each row shows the inputs (\texttt{A} and \texttt{B}) and the corresponding OR result.}
+    \label{tab:or_gate_results}
+\end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{test_benches/or_64_tb.png}
+    \caption{Waveform generated during 64-bit OR Gate testing. This figure illustrates the transitions of inputs and outputs, validating the module's functionality.}
+    \label{fig:or_gate_waveform}
+\end{figure}
+
+\subsection*{ALU Control Unit}
+
+The ALU Control Unit is a critical module responsible for decoding the operation type based on the instruction fields \texttt{alu\_op}, \texttt{funct7}, and \texttt{funct3}. It produces a 4-bit \texttt{alu\_control} signal, enabling the ALU to execute operations such as addition, subtraction, logical AND, OR, multiplication, division, and remainder computations. The unit differentiates between signed and unsigned operations, ensuring proper decoding for all supported instructions.
+
+\paragraph{Inputs and Outputs}
+The ALU Control Unit accepts three inputs: \texttt{alu\_op} (2 bits), \texttt{funct7} (7 bits), and \texttt{funct3} (3 bits). It generates a 4-bit \texttt{alu\_control} signal to guide the ALU in selecting the correct operation.
+
+\paragraph{ALU Operations}
+The mapping of \texttt{alu\_op}, \texttt{funct7}, and \texttt{funct3} to the \texttt{alu\_control} signal is shown in Table \ref{tab:alu_control_mapping}. Each entry corresponds to a specific ALU operation.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabular}{|c|c|c|c|l|}
+        \hline
+        \textbf{\texttt{alu\_op}} & \textbf{\texttt{funct7}} & \textbf{\texttt{funct3}} & \textbf{\texttt{alu\_control}} & \textbf{Operation} \\
+        \hline
+        \texttt{00} & \texttt{XXXXXXX} & \texttt{XXX} & \texttt{0010} & LD/SD (Signed ADD) \\
+        \texttt{01} & \texttt{XXXXXXX} & \texttt{XXX} & \texttt{0110} & BEQ (Signed SUBTRACT) \\
+        \texttt{10} & \texttt{1001000} & \texttt{111} & \texttt{0000} & AND (Bitwise) \\
+        \texttt{10} & \texttt{1001001} & \texttt{111} & \texttt{0001} & OR (Bitwise) \\
+        \texttt{10} & \texttt{0000000} & \texttt{000} & \texttt{0010} & ADD (Signed) \\
+        \texttt{10} & \texttt{1000001} & \texttt{000} & \texttt{0011} & ADDU (Unsigned) \\
+        \texttt{10} & \texttt{0100000} & \texttt{000} & \texttt{0110} & SUB (Signed) \\
+        \texttt{10} & \texttt{1000011} & \texttt{100} & \texttt{0111} & SUBU (Unsigned) \\
+        \texttt{10} & \texttt{0000001} & \texttt{000} & \texttt{1000} & MUL (Signed) \\
+        \texttt{10} & \texttt{0110001} & \texttt{001} & \texttt{1001} & MULU (Unsigned) \\
+        \texttt{10} & \texttt{0000001} & \texttt{100} & \texttt{1010} & DIV (Signed) \\
+        \texttt{10} & \texttt{0110101} & \texttt{010} & \texttt{1011} & DIVU (Unsigned) \\
+        \texttt{10} & \texttt{0111000} & \texttt{011} & \texttt{1100} & REM (Signed) \\
+        \texttt{10} & \texttt{0111001} & \texttt{011} & \texttt{1101} & REMU (Unsigned) \\
+        \texttt{10} & \texttt{0111100} & \texttt{110} & \texttt{1110} & MULH (Signed) \\
+        \texttt{10} & \texttt{0111101} & \texttt{110} & \texttt{1111} & MULHU (Unsigned) \\
+        \hline
+    \end{tabular}
+    \caption{Mapping of \texttt{alu\_op}, \texttt{funct7}, and \texttt{funct3} fields to \texttt{alu\_control} and their corresponding operations.}
+    \label{tab:alu_control_mapping}
+\end{table}
+
+\paragraph{Testbench Description}
+The testbench evaluated all combinations of \texttt{alu\_op}, \texttt{funct7}, and \texttt{funct3} fields, confirming that the module correctly generated the expected \texttt{alu\_control} signal for each input configuration. The results were displayed in a structured format for verification.
+
+\paragraph{Results}
+The testbench results confirm the module's correctness. For instance, when \texttt{alu\_op = 10}, \texttt{funct7 = 1001000}, and \texttt{funct3 = 111}, the module correctly generates \\ \texttt{alu\_control = 0000} for the AND operation. Table \ref{tab:alu_control_results} summarizes the test results.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{2pt}
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{\texttt{alu\_op}} & \textbf{\texttt{funct7}} & \textbf{\texttt{funct3}} & \textbf{\texttt{alu\_control}} \\
+        \hline
+        \texttt{10} & \texttt{1001000} & \texttt{111} & \texttt{0000} \\
+        \texttt{10} & \texttt{1001001} & \texttt{111} & \texttt{0001} \\
+        \texttt{00} & \texttt{XXXXXXX} & \texttt{XXX} & \texttt{0010} \\
+        \texttt{10} & \texttt{0000000} & \texttt{000} & \texttt{0010} \\
+        \texttt{10} & \texttt{1000001} & \texttt{000} & \texttt{0011} \\
+        \texttt{01} & \texttt{XXXXXXX} & \texttt{XXX} & \texttt{0110} \\
+        \texttt{10} & \texttt{0100000} & \texttt{000} & \texttt{0110} \\
+        \texttt{10} & \texttt{1000011} & \texttt{100} & \texttt{0111} \\
+        \texttt{10} & \texttt{0000001} & \texttt{000} & \texttt{1000} \\
+        \texttt{10} & \texttt{0110001} & \texttt{001} & \texttt{1001} \\
+        \texttt{10} & \texttt{0000001} & \texttt{100} & \texttt{1010} \\
+        \texttt{10} & \texttt{0110101} & \texttt{010} & \texttt{1011} \\
+        \texttt{10} & \texttt{0111000} & \texttt{011} & \texttt{1100} \\
+        \texttt{10} & \texttt{0111001} & \texttt{011} & \texttt{1101} \\
+        \texttt{10} & \texttt{0111100} & \texttt{110} & \texttt{1110} \\
+        \texttt{10} & \texttt{0111101} & \texttt{110} & \texttt{1111} \\
+        \hline
+    \end{tabular}
+    \caption{ALU Control Unit test results in binary format. The table shows the \texttt{alu\_op}, \texttt{funct7}, \texttt{funct3}, and the resulting \texttt{alu\_control}.}
+    \label{tab:alu_control_results}
+\end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{test_benches/alu_control_unit_tb.png}
+    \caption{Waveform generated during ALU Control Unit testing. This figure illustrates the transitions of inputs and outputs, validating the module's functionality.}
+    \label{fig:alu_control_waveform}
+\end{figure}
+
+\subsection*{Control Unit}
+
+The Control Unit is a critical component of the 64-bit RISC-V single-cycle CPU. It is responsible for generating control signals that orchestrate the execution of instructions by other components such as the ALU, memory, and register file. Based on the 7-bit \texttt{opcode} field of an instruction, the Control Unit ensures the correct behavior for various instruction types, including load, store, branch, and arithmetic operations.
+
+\paragraph{Inputs and Outputs}
+The Control Unit accepts a single 7-bit input, \texttt{opcode}, which encodes the instruction type. It generates seven output signals that control various processor functions. The \texttt{branch} signal is asserted for branch instructions to activate the branching logic. The \texttt{mem\_read} signal is asserted during load instructions to enable reading from memory. The \texttt{mem\_to\_reg} signal selects whether data from memory or the ALU result is written back to the register file. The \texttt{alu\_op} signal is a 2-bit signal passed to the ALU Control Unit to indicate the required operation type. The \texttt{mem\_write} signal is asserted during store instructions to enable writing to memory. The \texttt{alu\_src} signal determines whether the ALU's second operand is a register or an immediate value. The \texttt{reg\_write} signal is asserted to enable writing results back to a register. The table below shows how the control signals are generated based on the opcode:
+
+\begin{table}[h!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{2pt}
+    \begin{tabular}{|c|c|c|c|c|c|c|c|}
+        \hline
+        \textbf{\texttt{Opcode}} & \textbf{\texttt{Branch}} & \textbf{\texttt{MemRead}} & \textbf{\texttt{MemtoReg}} & \textbf{\texttt{ALUOp}} & \textbf{\texttt{MemWrite}} & \textbf{\texttt{ALUSrc}} & \textbf{\texttt{RegWrite}} \\
+        \hline
+        \texttt{0000011} & 0 & 1 & 1 & \texttt{00} & 0 & 1 & 1 \\
+        \texttt{0100011} & 0 & 0 & 0 & \texttt{00} & 1 & 1 & 0 \\
+        \texttt{1100011} & 1 & 0 & 0 & \texttt{01} & 0 & 0 & 0 \\
+        \texttt{0110011} & 0 & 0 & 0 & \texttt{10} & 0 & 0 & 1 \\
+        \hline
+    \end{tabular}
+    \caption{Control signal mapping for different opcodes.}
+    \label{tab:control_unit_mapping}
+\end{table}
+
+\paragraph{Testbench Description}
+The testbench for the Control Unit evaluated the module's response to different \texttt{opcode} values. Each test case checked whether the module correctly asserted or de-asserted the output signals in accordance with the expected behavior. The results were displayed in a structured format to confirm the correctness of the control signal generation.
+
+\paragraph{Results}
+The testbench results confirm the accuracy of the Control Unit's behavior. For example, when \texttt{opcode = 0000011}, the module correctly enabled \texttt{mem\_read} and \texttt{mem\_to\_reg}, while setting \texttt{alu\_op = 00}. For \texttt{opcode = 0100011}, the module asserted \texttt{mem\_write} and \texttt{alu\_src}, while disabling all other signals. These results validate the module's functionality across various instruction types.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{2pt}
+    \begin{tabular}{|c|c|c|c|c|c|c|c|}
+        \hline
+        \textbf{\texttt{opcode}} & \textbf{\texttt{branch}} & \textbf{\texttt{mem\_read}} & \textbf{\texttt{mem\_to\_reg}} & \textbf{\texttt{alu\_op}} & \textbf{\texttt{mem\_write}} & \textbf{\texttt{alu\_src}} & \textbf{\texttt{reg\_write}} \\
+        \hline
+        \texttt{0000011} & 0 & 1 & 1 & \texttt{00} & 0 & 1 & 1 \\
+        \texttt{0100011} & 0 & 0 & 0 & \texttt{00} & 1 & 1 & 0 \\
+        \texttt{1100011} & 1 & 0 & 0 & \texttt{01} & 0 & 0 & 0 \\
+        \texttt{0110011} & 0 & 0 & 0 & \texttt{10} & 0 & 0 & 1 \\
+        \texttt{1111111} & 0 & 0 & 0 & \texttt{00} & 0 & 0 & 0 \\
+        \hline
+    \end{tabular}
+    \caption{Control Unit test results for various \texttt{opcode} values. The table lists the input \texttt{opcode} and the corresponding control signal outputs.}
+    \label{tab:control_unit_results}
+\end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{test_benches/control_unit_tb.png}
+    \caption{Waveform generated during Control Unit testing. This figure illustrates the transitions of inputs and outputs, validating the module's functionality.}
+    \label{fig:control_unit_waveform}
+\end{figure}
+
+\subsection*{Data Memory}
+
+The Data Memory module is a critical component in the single-cycle RISC-V CPU. It facilitates data storage and retrieval during program execution. This module supports synchronous write operations on the rising edge of the clock and asynchronous read operations for immediate data availability. Data is stored in 8-bit locations, with each 64-bit word distributed across eight consecutive memory locations in big-endian format. The memory layout and design ensure compatibility with the CPU's single-cycle constraints.
+
+\paragraph{Inputs and Outputs}
+The Data Memory module accepts several inputs and produces a single output. The \texttt{address} input specifies the memory location being accessed. The \texttt{write\_data} input provides the 64-bit data to be stored. Control signals, \texttt{mem\_read} and \texttt{mem\_write}, enable read and write operations, respectively. The \texttt{clk} input ensures synchronization for write operations. The module's output, \texttt{read\_data}, reflects the content of the addressed memory location when \texttt{mem\_read} is asserted.
+
+\paragraph{Testbench Description}
+The testbench for the Data Memory module thoroughly verified its functionality by simulating a variety of read and write operations. Initial values were preloaded into the memory to test the correctness of both reading and writing processes. Each test case verified that the module behaved as expected, with the results presented in a structured format for clarity.
+
+\paragraph{Results}
+The testbench results confirm the module's correct operation across all tested scenarios. For instance, during the second cycle, when \texttt{address = 00} and \texttt{write\_data = DEADBEEF12345678}, the data was successfully written to the specified memory location. Subsequent read operations confirmed that the stored values could be retrieved accurately. Table \ref{tab:data_memory_results} summarizes the results, detailing the cycle-by-cycle behavior of the module.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{6pt}
+    \begin{tabular}{|c|c|c|c|c|c|c|}
+        \hline
+        \textbf{\texttt{cycle}} & \textbf{\texttt{address}} & \textbf{\texttt{write\_data}} & \textbf{\texttt{mem\_write}} & \textbf{\texttt{mem\_read}} & \textbf{\texttt{read\_data}} \\
+        \hline
+        2 & \texttt{00} & \texttt{DEADBEEF12345678} & 1 & 0 & \texttt{0000000000000000} \\
+        3 & \texttt{01} & \texttt{CAFEBABE87654321} & 1 & 0 & \texttt{0000000000000000} \\
+        4 & \texttt{02} & \texttt{123456789ABCDEF0} & 1 & 0 & \texttt{0000000000000000} \\
+        5 & \texttt{00} & \texttt{-} & 0 & 1 & \texttt{DEADBEEF12345678} \\
+        6 & \texttt{01} & \texttt{-} & 0 & 1 & \texttt{CAFEBABE87654321} \\
+        7 & \texttt{02} & \texttt{-} & 0 & 1 & \texttt{123456789ABCDEF0} \\
+        8 & \texttt{03} & \texttt{AABBCCDDEEFF0011} & 1 & 0 & \texttt{0000000000000000} \\
+        9 & \texttt{03} & \texttt{-} & 0 & 1 & \texttt{AABBCCDDEEFF0011} \\
+        \hline
+    \end{tabular}
+    \caption{Data Memory operation summary. This table shows the cycle-by-cycle behavior of the Data Memory module, including read and write operations.}
+    \label{tab:data_memory_results}
+\end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{test_benches/data_memory_tb.png}
+    \caption{Waveform generated during Data Memory testing. This figure illustrates the transitions of inputs and outputs, validating the module's functionality for various read and write scenarios.}
+    \label{fig:data_memory_waveform}
+\end{figure}
+
+\subsection*{Register File}
+
+The Register File is a fundamental component of the 64-bit RISC-V single-cycle CPU. It consists of 32 registers, each 64 bits wide, and supports two simultaneous asynchronous read operations and one synchronous write operation per clock cycle. Register \texttt{x0} is hardwired to zero, ensuring compliance with the RISC-V ISA specification. Registers \texttt{x1} through \texttt{x11} are exposed for debugging and monitoring purposes.
+
+\paragraph{Inputs and Outputs}
+The Register File accepts three 5-bit inputs: \texttt{read\_reg1}, \texttt{read\_reg2}, and \texttt{write\_reg}, which specify the registers for read and write operations. The 64-bit \texttt{write\_data} input provides data to be written into the specified register, and the \texttt{reg\_write} signal enables or disables write operations. The \texttt{clk} signal ensures synchronization for write operations. The module outputs two 64-bit read ports, \texttt{read\_data1} and \texttt{read\_data2}, and exposes the values of registers \texttt{x1} through \texttt{x11} for debugging purposes.
+
+\paragraph{Testbench Description}
+The testbench validated the Register File's functionality by simulating synchronous writes and asynchronous reads. Each test confirmed that data was written to the correct register and read correctly. Additionally, the hardwired behavior of \texttt{x0} was verified to ensure it remained constant at zero. Test results were displayed cycle-by-cycle to verify expected behavior.
+
+\paragraph{Results}
+The testbench confirmed the Register File's correct operation across all scenarios. For instance, in Cycle 2, a write to \texttt{x1} with the value \texttt{DEADBEEF12345678} was performed successfully. Attempts to write to \texttt{x0} were ignored as expected. Table \ref{tab:register_file_results} summarizes the observed behavior.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{|c|c|c|c|c|c|}
+        \hline
+        \textbf{\texttt{cycle}} & \textbf{\texttt{wr\_en}} & \textbf{\texttt{wr\_reg}} & \textbf{\texttt{wr\_data}} & \textbf{\texttt{rd\_data\_1}} & \textbf{\texttt{rd\_data\_2}} \\
+        \hline
+        2 & 1 & \texttt{x1} & \texttt{DEADBEEF12345678} & \texttt{0000000000000000} & \texttt{0000000000000000} \\
+        3 & 1 & \texttt{x2} & \texttt{CAFEBABE87654321} & \texttt{0000000000000000} & \texttt{0000000000000000} \\
+        4 & 0 & \texttt{x2} & \texttt{CAFEBABE87654321} & \texttt{DEADBEEF12345678} & \texttt{CAFEBABE87654321} \\
+        6 & 0 & \texttt{x3} & \texttt{123456789ABCDEF0} & \texttt{123456789ABCDEF0} & \texttt{CAFEBABE87654321} \\
+        8 & 0 & \texttt{x0} & \texttt{FFFFFFFFFFFFFFFF} & \texttt{0000000000000000} & \texttt{CAFEBABE87654321} \\
+        \hline
+    \end{tabular}
+    \caption{Register File operation summary. This table shows the cycle-by-cycle behavior of the Register File module, including read and write operations.}
+    \label{tab:register_file_results}
+\end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{test_benches/register_file_tb.png}
+    \caption{Waveform generated during Register File testing. This figure illustrates the transitions of inputs and outputs, validating the module's functionality for various scenarios.}
+    \label{fig:register_file_waveform}
+\end{figure}
+
+\subsection*{Instruction Memory}
+
+The Instruction Memory module is a vital component of the 64-bit RISC-V single-cycle CPU. It stores program instructions and provides the instruction corresponding to the current Program Counter (\texttt{pc}). The module is designed to latch the instruction output on the rising edge of the clock, ensuring synchronization with other components. Each instruction is 32 bits wide, and the \texttt{pc} increments by 4 bytes for each subsequent instruction to maintain alignment.
+
+\paragraph{Inputs and Outputs}
+The Instruction Memory module accepts a 64-bit \texttt{pc} input, representing the current address of the instruction to be fetched, and a clock signal (\texttt{clk}). The module outputs the 32-bit \texttt{instruction}, corresponding to the memory location specified by \texttt{pc}. The memory is preloaded with program instructions to evaluate  the arithmetic expression
+\[
+y = \frac{(a \cdot f - c \cdot d) + e}{b}.
+\]
+
+\paragraph{Testbench Description}
+The testbench validated the Instruction Memory's functionality by simulating sequential reads at different \texttt{pc} values. The Program Counter was incremented by 4 in each cycle to fetch consecutive instructions, verifying correct addressing and data retrieval. The results of each fetch were compared against the expected binary encoding of the instructions.
+
+\paragraph{Results}
+The testbench confirmed the correct operation of the Instruction Memory module. For each value of \texttt{pc}, the fetched instruction matched the expected binary encoding, verifying the correctness of the memory initialization and addressing logic. Table \ref{tab:instruction_memory_results} summarizes the observed behavior.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{6pt}
+    \begin{tabular}{|c|c|}
+        \hline
+        \textbf{\texttt{pc}} & \textbf{\texttt{instruction}} \\
+        \hline
+        \texttt{0000000000000000} & \texttt{00000000000000000011000010000011} \\
+        \texttt{0000000000000004} & \texttt{00000000010100000011000100000011} \\
+        \texttt{0000000000000008} & \texttt{00000010000100010000000110110011} \\
+        \texttt{000000000000000C} & \texttt{00000000001000000011001000000011} \\
+        \texttt{0000000000000010} & \texttt{00000000001100000011001010000011} \\
+        \texttt{0000000000000014} & \texttt{00000010010000101000001100110011} \\
+        \texttt{0000000000000018} & \texttt{01000000011000011000001110110011} \\
+        \hline
+    \end{tabular}
+    \caption{Instruction Memory operation summary. This table lists the cycle-by-cycle behavior of the Instruction Memory module, showing the fetched instructions for corresponding \texttt{pc} values.}
+    \label{tab:instruction_memory_results}
+\end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{test_benches/instruction_memory_tb.png}
+    \caption{Waveform generated during Instruction Memory testing. This figure illustrates the transitions of inputs and outputs, validating the module's functionality.}
+    \label{fig:instruction_memory_waveform}
+\end{figure}
+
+\subsection*{Program Counter}
+
+The Program Counter (PC) module is an essential component of the 64-bit RISC-V single-cycle CPU. It determines the address of the next instruction to be executed, updating based on input signals for reset, enable, and the next PC value. The module supports synchronous updates on the rising edge of the clock, with reset functionality to initialize the PC to zero and enable functionality to selectively update the PC value.
+
+\paragraph{Inputs and Outputs}
+The Program Counter module accepts several inputs to determine its behavior. The \texttt{pc\_in} input is a 64-bit value specifying the next PC value. The \texttt{reset} signal, when asserted, resets the PC to zero on the rising edge of the clock. The \texttt{enable} signal allows updates to the PC with the value of \texttt{pc\_in} when asserted, while a de-asserted \texttt{enable} signal causes the PC to hold its current value. The \texttt{clk} input synchronizes these operations. The module outputs the current PC value as \texttt{pc}. Table \ref{tab:pc_operations} summarizes the operations based on different input conditions.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabular}{|c|c|c|l|}
+        \hline
+        \textbf{\texttt{reset}} & \textbf{\texttt{enable}} & \textbf{\texttt{clk}} & \textbf{Operation} \\
+        \hline
+        1 & X & \texttt{posedge} & The PC is reset to 0. \\
+        0 & 1 & \texttt{posedge} & The PC updates with the value of \texttt{pc\_in}. \\
+        0 & 0 & \texttt{posedge} & The PC holds its current value. \\
+        \hline
+    \end{tabular}
+    \caption{Program Counter operations under different input conditions.}
+    \label{tab:pc_operations}
+\end{table}
+
+\paragraph{Testbench Description}
+The testbench validated the functionality of the Program Counter by simulating various scenarios, including reset, enable, and hold operations. Each test ensured the Program Counter behaved as expected under different input conditions. For instance, the reset operation was verified to initialize the Program Counter to zero. Similarly, the enable signal was tested to confirm selective updates of the Program Counter with the value of \texttt{pc\allowbreak\_in}. These tests were documented in a structured format for clarity and ease of analysis.
+
+\paragraph{Results}
+The testbench results confirm the correct behavior of the Program Counter module across all tested scenarios. For instance, when \texttt{reset = 1}, the PC was successfully reset to zero. Subsequent tests verified that the PC updated correctly when \texttt{enable = 1} and held its value when \texttt{enable = 0}. Table \ref{tab:program_counter_results} summarizes the results, detailing the input conditions and corresponding PC behavior.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{6pt}
+    \begin{tabular}{|c|c|c|c|c|}
+        \hline
+        \textbf{\texttt{clk}} & \textbf{\texttt{reset}} & \textbf{\texttt{enable}} & \textbf{\texttt{pc\_in}} & \textbf{\texttt{pc}} \\
+        \hline
+        1 & 1 & 0 & \texttt{0100} & \texttt{0000} \\
+        1 & 0 & 1 & \texttt{0200} & \texttt{0200} \\
+        1 & 0 & 0 & \texttt{0300} & \texttt{0200} \\
+        1 & 0 & 1 & \texttt{0400} & \texttt{0400} \\
+        \hline
+    \end{tabular}
+    \caption{Program Counter operation summary. This table shows the behavior of the PC module under various input conditions, including reset and enable operations.}
+    \label{tab:program_counter_results}
+\end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{test_benches/program_counter_tb.png}
+    \caption{Waveform generated during Program Counter testing. This figure illustrates the transitions of inputs and outputs, validating the module's functionality across different scenarios.}
+    \label{fig:program_counter_waveform}
+\end{figure}
+
+\subsection*{Immediate Generator}
+
+The Immediate Generator is a crucial component of the 64-bit RISC-V single-cycle CPU. It generates a 64-bit sign-extended immediate value from the 32-bit instruction input. This immediate value is essential for supporting various instruction types, including I-Type, S-Type, B-Type, U-Type, and J-Type. The generator extracts and sign-extends specific fields of the instruction, adhering to the RISC-V ISA specifications.
+
+\paragraph{Inputs and Outputs}
+The Immediate Generator accepts a 32-bit instruction (\texttt{instr}) as input and produces a 64-bit immediate value (\texttt{imm}) as output. The extraction and sign-extension depend on the instruction's opcode, which determines the immediate format. For I-Type instructions, bits [31:20] are extracted and sign-extended to 64 bits. S-Type instructions combine bits [31:25] and [11:7] before sign-extending them to 64 bits. B-Type instructions combine bits [31], [7], [30:25], and [11:8], append a 0, and then sign-extend to 64 bits. U-Type instructions extract bits [31:12], append 12 zeros, and sign-extend to 64 bits. J-Type instructions combine bits [31], [19:12], [20], and [30:21], append a 0, and then sign-extend to 64 bits.
+
+\paragraph{Testbench Description}
+The testbench verified the functionality of the Immediate Generator by applying instructions corresponding to different immediate formats. Each instruction was decoded, and the generated immediate value was compared with the expected result. The correctness of the sign-extension for all tested formats was validated, and the results were displayed in a structured format for verification.
+
+\paragraph{Results}
+The testbench confirmed the correct operation of the Immediate Generator across all tested formats. For instance, an I-Type instruction with \texttt{instr = 0000000000110000 \break 1000010100010011} produced the expected immediate value of \texttt{0000000000000003}. Similarly, a U-Type instruction with \texttt{instr = 00000000010100001000000010110111} correctly generated an immediate value of \texttt{0000000000508000}. Table \ref{tab:immediate_generator_results} summarizes the observed behavior.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{6pt}
+    \begin{tabular}{|c|c|}
+        \hline
+        \textbf{\texttt{instr}} & \textbf{\texttt{imm}} \\
+        \hline
+        \texttt{00000000001100001000010100010011} & \texttt{0000000000000003} \\
+        \texttt{00000000110000001010000000100011} & \texttt{0000000000000000} \\
+        \texttt{00000000101000001000000001100011} & \texttt{0000000000000000} \\
+        \texttt{00000000010100001000000010110111} & \texttt{0000000000508000} \\
+        \texttt{00000000101000000000111101101111} & \texttt{000000000000000A} \\
+        \hline
+    \end{tabular}
+    \caption{Immediate Generator operation summary. This table lists the 32-bit instructions and the corresponding 64-bit immediate values generated by the module.}
+    \label{tab:immediate_generator_results}
+\end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{test_benches/immediate_generator_tb.png}
+    \caption{Waveform generated during Immediate Generator testing. This figure illustrates the decoding of instructions and the generation of immediate values, validating the module's functionality.}
+    \label{fig:immediate_generator_waveform}
+\end{figure}
+
+\newpage
+
+\subsection*{2-to-1 Multiplexer}
+
+The 2-to-1 Multiplexer is a combinational circuit that selects one of two 64-bit inputs, based on a single-bit select signal (\texttt{sel}). It serves as a fundamental building block in the single-cycle RISC-V CPU, routing data to the desired path depending on the control signal.
+
+\paragraph{Inputs and Outputs}
+The multiplexer accepts three inputs: two 64-bit data inputs (\texttt{in0} and \texttt{in1}) and a 1-bit select signal (\texttt{sel}). The output (\texttt{out}) is a 64-bit value that matches either \texttt{in0} or \texttt{in1}, depending on the value of \texttt{sel}. The behavior of the multiplexer is summarized in Table \ref{tab:mux_2to1_operation}.
+
+\begin{table}[h!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{6pt}
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{\texttt{sel}} & \textbf{\texttt{in0}} & \textbf{\texttt{in1}} & \textbf{\texttt{out}} \\
+        \hline
+        0 & Selected & Ignored & Matches \texttt{in0} \\
+        1 & Ignored  & Selected & Matches \texttt{in1} \\
+        \hline
+    \end{tabular}
+    \caption{2-to-1 Multiplexer operation summary.}
+    \label{tab:mux_2to1_operation}
+\end{table}
+
+\paragraph{Testbench Description}
+The testbench evaluated the functionality of the multiplexer by testing all combinations of the select signal and input values. Different scenarios were simulated, including selecting zero, selecting all ones, and choosing between mixed values. The results were recorded to ensure that the multiplexer behaved as expected for each test case.
+
+\paragraph{Results}
+The testbench results confirmed the correct operation of the 2-to-1 Multiplexer across all tested scenarios. For instance, when \texttt{sel = 0} and \texttt{in0 = 0000000000000005}, the output matched \texttt{in0}. Similarly, when \texttt{sel = 1} and \texttt{in1 = AAAAAAAAAAAAAAAA}, the output correctly matched \texttt{in1}. Table \ref{tab:mux_2to1_results} summarizes the results.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{6pt}
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{\texttt{sel}} & \textbf{\texttt{in0}} & \textbf{\texttt{in1}} & \textbf{\texttt{out}} \\
+        \hline
+        0 & \texttt{0000000000000005} & \texttt{AAAAAAAAAAAAAAAA} & \texttt{0000000000000005} \\
+        1 & \texttt{0000000000000005} & \texttt{AAAAAAAAAAAAAAAA} & \texttt{AAAAAAAAAAAAAAAA} \\
+        0 & \texttt{0000000000000000} & \texttt{0000000000000000} & \texttt{0000000000000000} \\
+        1 & \texttt{FFFFFFFFFFFFFFFF} & \texttt{FFFFFFFFFFFFFFFF} & \texttt{FFFFFFFFFFFFFFFF} \\
+        0 & \texttt{123456789ABCDEF0} & \texttt{FEDCBA9876543210} & \texttt{123456789ABCDEF0} \\
+        1 & \texttt{123456789ABCDEF0} & \texttt{FEDCBA9876543210} & \texttt{FEDCBA9876543210} \\
+        \hline
+    \end{tabular}
+    \caption{2-to-1 Multiplexer operation summary. This table shows the behavior of the multiplexer for different values of \texttt{sel}, \texttt{in0}, and \texttt{in1}.}
+    \label{tab:mux_2to1_results}
+\end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{test_benches/mux_2to1_tb.png}
+    \caption{Waveform generated during 2-to-1 Multiplexer testing. This figure illustrates the transitions of inputs and outputs, validating the module's functionality.}
+    \label{fig:mux_2to1_waveform}
+\end{figure}
+
+\subsection*{Shift Left by 1}
+
+The Shift Left by 1 module is a fundamental component in the RISC-V single-cycle CPU. It takes a 64-bit input value and shifts all bits left by one position, with the least significant bit padded with 0. This operation is crucial for address calculations and other arithmetic tasks.
+
+\paragraph{Inputs and Outputs}
+The module accepts a 64-bit input (\texttt{in}) and produces a 64-bit output (\texttt{out}), where the input value has been shifted left by one bit. This behavior ensures compatibility with the CPU's addressing and computational needs.
+
+\paragraph{Testbench Description}
+The testbench validated the module's functionality by simulating various 64-bit input values and verifying the corresponding outputs. The \texttt{in} value was set to diverse test cases, ranging from edge cases (e.g., all zeros or all ones) to mixed bit patterns, ensuring the module's correctness in all scenarios. The results were presented in a cycle-by-cycle format to confirm accurate functionality.
+
+\paragraph{Results}
+The testbench confirmed the module's correct operation for all test cases. For example, an input of \texttt{0000000000000001} produced an output of \texttt{0000000000000002}, and an input of \texttt{123456789ABCDEF0} resulted in an output of \texttt{2468ACF13579BDE0}. Table \ref{tab:shift_left_results} summarizes the observed behavior.
+
+\begin{table}[ht!]
+    \centering
+    \renewcommand{\arraystretch}{1.1}
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{|c|c|}
+        \hline
+        \textbf{\texttt{in}} & \textbf{\texttt{out}} \\
+        \hline
+        \texttt{0000000000000001} & \texttt{0000000000000002} \\
+        \texttt{8000000000000000} & \texttt{0000000000000000} \\
+        \texttt{7FFFFFFFFFFFFFFF} & \texttt{FFFFFFFFFFFFFFFE} \\
+        \texttt{123456789ABCDEF0} & \texttt{2468ACF13579BDE0} \\
+        \texttt{0000000000000000} & \texttt{0000000000000000} \\
+        \hline
+    \end{tabular}
+    \caption{Shift Left by 1 operation summary. This table shows the input-output relationship for the testbench cases.}
+    \label{tab:shift_left_results}
+\end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{test_benches/shift_left_64_tb.png}
+    \caption{Waveform generated during Shift Left by 1 testing. This figure illustrates the transitions of inputs and outputs, validating the module's functionality.}
+    \label{fig:shift_left_waveform}
+\end{figure}
+
+\section*{Processor Integration and Instruction Execution}
+
+This section provides a comprehensive explanation of how the processor modules are integrated and describes the step-by-step execution of instructions loaded in the instruction memory. Each instruction's execution is detailed with reference to the cycle-by-cycle flow of control and data through the processor. The simulation results, \textbf{presented as printed statements due to the waveform's length}, correspond to the instruction memory and the functionality of the implemented processor.
+
+\subsection*{Instruction Memory and Corresponding Cycles}
+
+The instruction memory is initialized with the following program:
+\begin{enumerate}
+    \item \texttt{LD R1, 0x00}: Load the value at address \texttt{0x00} (\texttt{a}) into \texttt{R1}.
+    \item \texttt{LD R2, 0x05}: Load the value at address \texttt{0x05} (\texttt{f}) into \texttt{R2}.
+    \item \texttt{MUL R3, R1, R2}: Multiply \texttt{R1} and \texttt{R2} (\texttt{a} \texttt{*} \texttt{f}) and store the result in \texttt{R3}.
+    \item \texttt{LD R4, 0x02}: Load the value at address \texttt{0x02} (\texttt{c}) into \texttt{R4}.
+    \item \texttt{LD R5, 0x03}: Load the value at address \texttt{0x03} (\texttt{d}) into \texttt{R5}.
+    \item \texttt{MUL R6, R4, R5}: Multiply \texttt{R4} and \texttt{R5} (\texttt{c} \texttt{*} \texttt{d}) and store the result in \texttt{R6}.
+    \item \texttt{SUB R7, R3, R6}: Subtract \texttt{R6} from \texttt{R3} (\texttt{a} \texttt{*} \texttt{f} \texttt{-} \texttt{c} \texttt{*} \texttt{d}) and store the result in \texttt{R7}.
+    \item \texttt{LD R8, 0x04}: Load the value at address \texttt{0x04} (\texttt{e}) into \texttt{R8}.
+    \item \texttt{ADD R9, R7, R8}: Add \texttt{R7} and \texttt{R8} ((\texttt{a} \texttt{*} \texttt{f} \texttt{-} \texttt{c} \texttt{*} \texttt{d}) \texttt{+} \texttt{e}) and store the result in \texttt{R9}.
+    \item \texttt{LD R10, 0x01}: Load the value at address \texttt{0x01} (\texttt{b}) into \texttt{R10}.
+    \item \texttt{DIV R11, R9, R10}: Divide \texttt{R9} by \texttt{R10} (((\texttt{a} \texttt{*} \texttt{f} \texttt{-} \texttt{c} \texttt{*} \texttt{d}) \texttt{+} \texttt{e}) \texttt{/} \texttt{b}) and store the result in \texttt{R11}.
+    \item \texttt{SD R11, 0x06}: Store the value in \texttt{R11} (\texttt{y}) at address \texttt{0x06}.
+\end{enumerate}
+
+The processor executes these instructions cycle by cycle, with the following outputs generated:
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=\textwidth]{simulation_results.png}
+\caption{Combined output showing execution cycles, data memory contents, and register file state after program execution.}
+\label{fig:simulation_results}
+\end{figure}
+
+\subsection*{Cycle-by-Cycle Execution Flow}
+
+\begin{enumerate}
+    \item \textbf{Cycle 0:} The Program Counter (\texttt{PC}) starts at \texttt{0x0004}, fetching the instruction \texttt{LD R1, 0x00}. The Control Unit decodes the opcode \texttt{00000011} (Load operation). This activates the \texttt{MemRead} and \texttt{RegWrite} control signals, while \texttt{ALUSrc} is set to 1 to enable the immediate value \texttt{0x00} as an operand for the ALU. The ALU computes the effective memory address, which is \texttt{0x00}, and the data memory returns the value of \texttt{a}. The result (\texttt{a}) is written to register \texttt{R1}. No flags (\texttt{ZeroFlag}, \texttt{DivideByZeroFlag}) are active in this cycle.
+
+    \item \textbf{Cycle 1:} The next instruction, \texttt{LD R2, 0x05}, is fetched at \texttt{PC = 0x0008}. The Control Unit decodes the same opcode \texttt{00000011}. The \texttt{ALUSrc} signal is again set to 1, allowing the immediate value \texttt{0x05} to be sent to the ALU. The ALU computes the effective memory address, \texttt{0x05}, and the data memory outputs the value of \texttt{f}. This value is written to register \texttt{R2}, and the datapath remains active for memory read operations. No flags are triggered.
+
+    \item \textbf{Cycle 2:} At \texttt{PC = 0x000C}, the instruction \texttt{MUL R3, R1, R2} is executed. The Control Unit decodes the opcode \texttt{00110011}, enabling \texttt{RegWrite}. The Register File outputs \texttt{R1} (containing \texttt{a}) and \texttt{R2} (containing \texttt{f}) as operands to the ALU. The ALU is configured for multiplication (\texttt{ALUOp = 10}), and it computes \texttt{a * f}. The result is stored in \texttt{R3}. The datapath enables Register File write operations. No flags are active during this cycle.
+
+    \item \textbf{Cycle 3:} The instruction \texttt{LD R4, 0x02} is fetched at \texttt{PC = 0x0010}. The Control Unit decodes the opcode \texttt{00000011}, activating \texttt{MemRead} and \texttt{RegWrite}. The immediate value \texttt{0x02} is passed as an operand to the ALU via the \texttt{ALUSrc} signal. The ALU computes the effective memory address, \texttt{0x02}, and the data memory outputs the value \texttt{c}. The result is written to \texttt{R4}. No flags are activated in this cycle.
+
+    \item \textbf{Cycle 4:} The instruction \texttt{LD R5, 0x03} is fetched at \texttt{PC = 0x0014}. Following the decoding of opcode \texttt{00000011}, the immediate value \texttt{0x03} is passed to the ALU. The ALU computes the memory address, \texttt{0x03}, and retrieves the value \texttt{d} from data memory. This value is stored in \texttt{R5}. The Control Unit ensures that the memory read and register write signals are appropriately enabled.
+
+    \item \textbf{Cycle 5:} At \texttt{PC = 0x0018}, the instruction \texttt{MUL R6, R4, R5} is executed. The Control Unit configures the ALU for multiplication (\texttt{ALUOp = 10}). The Register File provides the values of \texttt{R4} (\texttt{c}) and \texttt{R5} (\texttt{d}) as operands. The ALU computes the product, \texttt{c * d}, and stores the result in \texttt{R6}. No flags are triggered in this cycle.
+
+    \item \textbf{Cycle 6:} The instruction \texttt{SUB R7, R3, R6} is fetched at \texttt{PC = 0x001C}. The Control Unit configures the ALU for subtraction (\texttt{ALUOp = 10}). The Register File outputs \texttt{R3} (containing \texttt{a * f}) and \texttt{R6} (containing \texttt{c * d}) as operands. The ALU computes the result, \texttt{a * f - c * d}, and stores it in \texttt{R7}. The datapath ensures that the result is written back to the Register File.
+
+    \item \textbf{Cycle 7:} At \texttt{PC = 0x0020}, the instruction \texttt{LD R8, 0x04} is fetched. The immediate value \texttt{0x04} is passed to the ALU, which computes the memory address. The data memory outputs the value \texttt{e}, which is written to \texttt{R8}.
+
+    \item \textbf{Cycle 8:} The instruction \texttt{ADD R9, R7, R8} is executed at \texttt{PC = 0x0024}. The Register File provides \texttt{R7} and \texttt{R8} as operands, corresponding to \texttt{(a * f - c * d)} and \texttt{e}. The ALU computes the sum, \texttt{(a * f - c * d) + e}, and stores it in \texttt{R9}. The datapath writes the result back to the Register File.
+
+    \item \textbf{Cycle 9:} The instruction \texttt{LD R10, 0x01} is fetched at \texttt{PC = 0x0028}. The immediate value \texttt{0x01} is passed to the ALU to compute the effective memory address. The data memory outputs the value \texttt{b}, which is written to \texttt{R10}.
+
+   \item \textbf{Cycle 10:} At \texttt{PC = 0x002C}, the instruction \texttt{DIV R11, R9, R10} is executed. The Register File provides \texttt{R9} and \texttt{R10} as operands, corresponding to \texttt{((a * f - c * d) + e)} and \texttt{b}, respectively. The ALU performs the division operation and stores the quotient in \texttt{R11}. The \texttt{DivideByZeroFlag} remains inactive because \texttt{R10} is non-zero.
+
+    \item \textbf{Cycle 11:} The instruction \texttt{SD R11, 0x06} is fetched at \texttt{PC = 0x0030}. The Register File provides \texttt{R11} (containing \texttt{y}), which is written to the data memory at address \texttt{0x06}.
+\end{enumerate}
+
+\section*{Conclusion}
+
+This project demonstrates the successful design and implementation of a 64-bit single-cycle processor capable of executing a subset of RISC-V instructions. By meticulously integrating core modules—such as the Program Counter, Instruction Memory, ALU, Register File, Control Unit, and Data Memory—into a cohesive architecture, the processor efficiently executes arithmetic, logical, memory access, and control flow operations. 
+
+The instruction set was carefully chosen to validate the processor's capabilities, encompassing operations like multiplication, division, addition, subtraction, and load/store instructions. The functional correctness of the processor was verified through a simulation of a specific program, which calculates the expression \(((a \cdot f) - (c \cdot d) + e) / b\) and stores the result \texttt{y} in memory. The results printed during the simulation illustrate step-by-step execution, showcasing how each instruction propagates through the processor's datapath, from fetching and decoding to memory access and write-back.
+
+Special attention was given to the modularity of the design, enabling clear datapath flows and efficient debugging. The Control Unit played a pivotal role in decoding instructions and generating control signals for each module. The ALU's functionality was extended to handle signed and unsigned arithmetic operations, including division and multiplication, with a \texttt{DivideByZeroFlag} to handle edge cases. Additionally, the processor's performance was validated using printed simulation outputs instead of waveforms due to the extensive nature of the results, making them more accessible for analysis.
+
+This implementation highlights the significance of modular design in processor development, ensuring scalability and flexibility for future enhancements. The processor could be further extended to support additional instructions, pipelining for improved performance, or multi-cycle execution for reduced complexity. The insights gained from this project form a solid foundation for advanced processor designs and architecture studies.
+
+
+\end{document}
